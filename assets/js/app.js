@@ -5,6 +5,11 @@
   const submit = document.querySelector('#submit-button');
   const result = document.querySelector('#result-section');
   const mapContent = document.querySelector('#map-content');
+  const mapCourse = document.querySelector('#map-compass-course');
+  const mapInsight = document.querySelector('#map-insight');
+  const mapDirection = document.querySelector('#map-direction');
+  const mapBearing = document.querySelector('#map-bearing');
+  const mapDistance = document.querySelector('#map-distance');
   const mapSummary = document.querySelector('#map-coordinate-summary');
   const historyBody = document.querySelector('#history-body');
   const historyStatus = document.querySelector('#history-status');
@@ -32,20 +37,57 @@
     if (invalidLongitudeField) return { error: 'Longitude must be between -180 and 180 degrees.', field: invalidLongitudeField };
     return { values };
   };
-  const point = (lat, lon) => ({ x: ((lon + 180) / 360) * 640, y: ((90 - lat) / 180) * 320 });
-  const renderMap = coords => {
-    const a = point(coords.location_a_latitude, coords.location_a_longitude);
+  // Keep boundary coordinates visible instead of clipping their markers at
+  // the SVG edges (for example, +/-90 latitude and +/-180 longitude).
+  const point = (lat, lon) => ({ x: 16 + ((lon + 180) / 360) * 608, y: 16 + ((90 - lat) / 180) * 288 });
+  const bearingBetween = (fromLat, fromLon, toLat, toLon) => {
+    const radians = degrees => (degrees * Math.PI) / 180;
+    const degrees = radiansValue => (radiansValue * 180) / Math.PI;
+    const lat1 = radians(fromLat);
+    const lat2 = radians(toLat);
+    const deltaLon = radians(toLon - fromLon);
+    const y = Math.sin(deltaLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+    return (degrees(Math.atan2(y, x)) + 360) % 360;
+  };
+  const compassDirection = bearing => ['North', 'North-East', 'East', 'South-East', 'South', 'South-West', 'West', 'North-West'][Math.round(bearing / 45) % 8];
+  const renderMap = (coords, distance) => {
+    const actualA = point(coords.location_a_latitude, coords.location_a_longitude);
     const actualB = point(coords.location_b_latitude, coords.location_b_longitude);
-    const overlap = Math.hypot(actualB.x - a.x, actualB.y - a.y) < 30;
+    const sameLocation = Number(coords.location_a_latitude) === Number(coords.location_b_latitude)
+      && Number(coords.location_a_longitude) === Number(coords.location_b_longitude);
+    const overlap = Math.hypot(actualB.x - actualA.x, actualB.y - actualA.y) < 30;
+    let a = actualA;
+    let b = actualB;
+
+    if (sameLocation) {
+      // This is a display-only offset: both submitted coordinates and the
+      // Haversine calculation remain unchanged at the shared location.
+      const center = {
+        x: Math.min(610, Math.max(30, actualA.x)),
+        y: Math.min(290, Math.max(30, actualA.y)),
+      };
+      a = { x: center.x - 12, y: center.y - 12 };
+      b = { x: center.x + 12, y: center.y + 12 };
+    }
     // Nearby real-world points can occupy the same pixel on a world-scale view.
     // Offset B only for display so both submitted locations remain identifiable.
-    const b = overlap ? { x: Math.min(616, a.x + 34), y: Math.max(24, a.y - 30) } : actualB;
-    const closeLink = overlap ? `<line class="marker-separator" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>` : '';
-    mapContent.innerHTML = `${closeLink}<line class="route" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><g class="map-marker-group"><circle class="marker-halo marker-halo-a" cx="${a.x}" cy="${a.y}" r="13"/><circle class="marker marker-a" cx="${a.x}" cy="${a.y}" r="8"/><text class="map-marker-letter" x="${a.x}" y="${a.y + 4}" text-anchor="middle">A</text></g><g class="map-marker-group"><circle class="marker-halo marker-halo-b" cx="${b.x}" cy="${b.y}" r="13"/><circle class="marker marker-b" cx="${b.x}" cy="${b.y}" r="8"/><text class="map-marker-letter" x="${b.x}" y="${b.y + 4}" text-anchor="middle">B</text></g>`;
+    if (!sameLocation && overlap) b = { x: Math.min(616, a.x + 34), y: Math.max(24, a.y - 30) };
+    const connection = sameLocation
+      ? `<circle class="same-location-indicator" cx="${(a.x + b.x) / 2}" cy="${(a.y + b.y) / 2}" r="21"/>`
+      : `<line class="route" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>${overlap ? `<line class="marker-separator" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>` : ''}`;
+    mapContent.innerHTML = `${connection}<g class="map-marker-group"><circle class="marker-halo marker-halo-a" cx="${a.x}" cy="${a.y}" r="13"/><circle class="marker marker-a" cx="${a.x}" cy="${a.y}" r="8"/><text class="map-marker-letter" x="${a.x}" y="${a.y + 4}" text-anchor="middle">A</text></g><g class="map-marker-group"><circle class="marker-halo marker-halo-b" cx="${b.x}" cy="${b.y}" r="13"/><circle class="marker marker-b" cx="${b.x}" cy="${b.y}" r="8"/><text class="map-marker-letter" x="${b.x}" y="${b.y + 4}" text-anchor="middle">B</text></g>`;
+    const bearing = bearingBetween(coords.location_a_latitude, coords.location_a_longitude, coords.location_b_latitude, coords.location_b_longitude);
+    mapCourse.hidden = sameLocation;
+    mapCourse.setAttribute('transform', `rotate(${bearing} 600 58)`);
+    mapInsight.hidden = false;
+    mapDirection.innerHTML = sameLocation ? 'Location B is at the same location as Location A.' : `Location B is generally <strong>${compassDirection(bearing)}</strong> of Location A.`;
+    mapBearing.textContent = sameLocation ? '—' : `${Math.round(bearing)}° ${compassDirection(bearing)}`;
+    mapDistance.textContent = `${Number(distance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} KM`;
     mapSummary.hidden = false;
     mapSummary.innerHTML = `<div class="coordinate-chip chip-a"><span>Location A</span><strong>${format(coords.location_a_latitude)}°, ${format(coords.location_a_longitude)}°</strong></div><div class="coordinate-chip chip-b"><span>Location B</span><strong>${format(coords.location_b_latitude)}°, ${format(coords.location_b_longitude)}°</strong></div>`;
   };
-  const resetMap = () => { mapContent.innerHTML = '<text x="320" y="154" text-anchor="middle">Enter coordinates to visualise them</text>'; mapSummary.hidden = true; mapSummary.innerHTML = ''; };
+  const resetMap = () => { mapContent.innerHTML = '<text x="320" y="154" text-anchor="middle">Enter coordinates to visualise them</text>'; mapCourse.hidden = false; mapCourse.removeAttribute('transform'); mapInsight.hidden = true; mapSummary.hidden = true; mapSummary.innerHTML = ''; };
   const loadHistory = async () => {
     try {
       const response = await fetch('api/history.php'); const data = await response.json();
@@ -68,7 +110,7 @@
       }
       const c = data.coordinates; document.querySelector('#distance-output').textContent = `${Number(data.distance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} KM`;
       document.querySelector('#result-detail').textContent = `A: ${format(c.location_a_latitude)}°, ${format(c.location_a_longitude)}°  ·  B: ${format(c.location_b_latitude)}°, ${format(c.location_b_longitude)}°`;
-      result.hidden = false; renderMap(c); showMessage('Distance calculated successfully.', 'success'); loadHistory();
+      result.hidden = false; renderMap(c, data.distance); showMessage('Distance calculated successfully.', 'success'); loadHistory();
     } catch (error) { showMessage(error.message || 'Unable to calculate the distance. Please check your coordinates and try again.'); result.hidden = true; markInvalid(error.field); }
     finally { submit.disabled = false; submit.textContent = 'Calculate distance'; }
   });
