@@ -43,11 +43,29 @@
 
             <aside class="card visual-card" aria-labelledby="visual-title">
                 <p class="eyebrow">Simplified view</p><h2 id="visual-title">Coordinate overview</h2>
-                <svg id="map" viewBox="0 0 640 320" role="img" aria-label="Simplified coordinate map showing locations after calculation">
+                <svg id="map" viewBox="0 0 640 320" role="img" aria-label="Simplified coordinate map showing the route and direction from Location A to Location B">
                     <rect class="map-bg" width="640" height="320" rx="16"/>
                     <g class="grid"><path d="M0 80H640M0 160H640M0 240H640M160 0V320M320 0V320M480 0V320"/><path class="equator" d="M0 160H640"/></g>
+                    <g class="map-compass" role="group" aria-label="Compass: north is up, east is right, south is down, and west is left">
+                        <circle class="map-compass-face" cx="600" cy="58" r="22"/>
+                        <path class="map-compass-north" d="M600 38 L606 58 L600 54 L594 58 Z"/>
+                        <path class="map-compass-south" d="M600 78 L594 58 L600 62 L606 58 Z"/>
+                        <path id="map-compass-course" class="map-compass-course" d="M600 35 L607 60 L600 55 L593 60 Z"/>
+                        <text class="map-compass-label map-compass-n" x="600" y="25" text-anchor="middle">N</text>
+                        <text class="map-compass-label map-compass-e" x="628" y="62" text-anchor="middle">E</text>
+                        <text class="map-compass-label map-compass-s" x="600" y="96" text-anchor="middle">S</text>
+                        <text class="map-compass-label map-compass-w" x="572" y="62" text-anchor="middle">W</text>
+                    </g>
                     <g id="map-content"><text x="320" y="154" text-anchor="middle">Enter coordinates to visualise them</text></g>
                 </svg>
+                <section id="map-insight" class="map-insight" aria-live="polite" hidden>
+                    <p class="map-route-title">Location A <span aria-hidden="true">→</span> Location B</p>
+                    <p id="map-direction" class="map-direction"></p>
+                    <div class="map-metrics">
+                        <div><span>Bearing</span><strong id="map-bearing">—</strong></div>
+                        <div><span>Calculated distance</span><strong id="map-distance">—</strong></div>
+                    </div>
+                </section>
                 <div id="map-coordinate-summary" class="map-coordinate-summary" aria-live="polite" hidden></div>
                 <p class="visual-note">A simplified equirectangular view for orientation only. Distance always uses the Haversine formula.</p>
             </aside>
